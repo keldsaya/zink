@@ -1,0 +1,9 @@
+menu General Setup
+
+config SAMPLE
+  bool "Sample feature"
+  default y
+  help
+    Config stub for testing
+
+endmenu
