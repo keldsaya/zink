@@ -61,7 +61,7 @@ $(if $(_config_objs),\
 $(foreach item,$(shell sed -n 's/^hostobj-y[[:space:]]*+= *//p' $(1) 2>/dev/null),\
   $(if $(filter %/,$(item)),\
   	$(call parse_zbuild,$(__current_dir)$(item)Makefile),\
-  	$(eval HOSTOBJS += $(BUILD)/$(__current_dir)$(item))\
+		$(eval HOSTOBJS += $(BUILD)/$(__current_dir)$(item:.o=.host.o))\
   )\
 )
 
@@ -125,6 +125,11 @@ $(BUILD)/%.o: %.c include/config.h
 	@echo "  CC    $<"
 	@mkdir -p $(dir $@)
 	@$(CC) $(CFLAGS) $(DEPFLAGS) -c $< -o $@
+
+$(BUILD)/%.host.o: %.c
+	@echo "  HOSTCC  $<"
+	@mkdir -p $(dir $@)
+	@$(HOSTCC) $(HOSTCFLAGS) $(HOSTDEPFLAGS) -c $< -o $@
 
 run: all
 	@echo "  RUN   $(OUTPUT)"
