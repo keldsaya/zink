@@ -6,4 +6,9 @@ config SAMPLE
   help
     Config stub for testing
 
+config STRING
+	string
+	default "Sample text"
+	help
+
 endmenu

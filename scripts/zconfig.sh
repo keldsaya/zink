@@ -4,7 +4,7 @@ CONFIG_OUT=".config"
 HEADER_OUT="include/config.h"
 
 generate_defconfig() {
-  echo "# Automatically generated from Kconfig"
+  echo "# Automatically generated from Zconfig"
 
   current_config=""
   current_type=""
@@ -16,7 +16,7 @@ generate_defconfig() {
 
     # Skip empty lines and comments
     [ -z "$trimmed" ] && continue
-    
+
     # Check if line starts with comment
     case "$trimmed" in
       "#"*) continue ;;
@@ -77,8 +77,8 @@ generate_defconfig() {
         fi
         ;;
     esac
-  done < Kconfig
-  
+  done < Zconfig
+
   # Output last config if any
   if [ -n "$current_config" ] && [ -n "$current_type" ]; then
     output_config
@@ -102,7 +102,7 @@ output_config() {
       fi
       ;;
   esac
-  
+
   current_config=""
   current_type=""
   default_value=""
@@ -117,7 +117,7 @@ generate_header() {
   while IFS= read -r line; do
     # Skip comments and empty lines
     [ -z "$line" ] && continue
-    
+
     case "$line" in
       "#"*) continue ;;
     esac
@@ -165,7 +165,7 @@ case "$1" in
 
   *)
     echo "Usage:"
-    echo "  $0 --def    - Generate default .config from Kconfig"
+    echo "  $0 --def    - Generate default .config from Zconfig"
     echo "  $0 --header - Generate config.h from .config"
     exit 1
     ;;

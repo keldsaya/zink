@@ -1,1 +1,1 @@
-hostprogs-y += mconfig/
+hostprog-y += mconfig/

@@ -1,0 +1,1 @@
+hostprog-y += gen-rules/

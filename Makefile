@@ -1,13 +1,22 @@
-CC       := gcc
-HOSTCC   := gcc
+VERSION = 0
+PATCHLEVEL = 0
+SUBLEVEL = 1
+EXTRAVERSION = -rc1
+NAME = Program
 
-CFLAGS   := -Wall -Wextra -Iinclude
+PROGRAMVERSION = $(VERSION)$(if $(PATCHLEVEL),.$(PATCHLEVEL)$(if $(SUBLEVEL),.$(SUBLEVEL)))$(EXTRAVERSION)
+VERSIONSTR = $(PROGRAMVERSION) ($(NAME))
+
+HOSTCC   := gcc
 HOSTCFLAGS := -Wall -Wextra
+HOSTLD   := $(HOSTCC)
+
+CC       := gcc
+CFLAGS   := -Wall -Wextra -Iinclude
+LD       := $(CC)
 
 DEPFLAGS = -MMD -MP -MF $(@:.o=.d)
 
-LD       := $(CC)
-HOSTLD   := $(HOSTCC)
 
 BUILD    := build
 OUTPUT   := $(BUILD)/program
@@ -27,16 +36,14 @@ endef
 
 define parse_zbuild
 $(eval __current_dir := $(dir $(1)))
-$(eval __saved_dir := $(__dir))
-$(eval __dir := $(__current_dir))
 
 $(eval _objs := $(shell sed -n 's/^obj-y[[:space:]]*+= *//p' $(1) 2>/dev/null))
 
 $(if $(_objs),\
   $(foreach item,$(_objs),\
     $(if $(filter %/,$(item)),\
-      $(call parse_zbuild,$(__dir)$(item)Makefile),\
-      $(eval OBJS += $(BUILD)/$(__dir)$(item))\
+      $(call parse_zbuild,$(__current_dir)$(item)Makefile),\
+      $(eval OBJS += $(BUILD)/$(__current_dir)$(item))\
     )\
   )\
 )
@@ -46,30 +53,48 @@ $(if $(_config_objs),\
   $(foreach item,$(_config_objs),\
     $(eval _var_name := $(shell echo $(item) | sed 's/\.o$$//' | tr 'a-z' 'A-Z'))\
     $(if $(filter y, $(CONFIG_$(_var_name))),\
-      $(eval OBJS += $(BUILD)/$(__dir)$(item))\
+      $(eval OBJS += $(BUILD)/$(__current_dir)$(item))\
     )\
   )\
 )
 
 $(foreach item,$(shell sed -n 's/^hostobj-y[[:space:]]*+= *//p' $(1) 2>/dev/null),\
   $(if $(filter %/,$(item)),\
-  	$(call parse_zbuild,$(__dir)$(item)Makefile),\
-  	$(eval HOSTOBJS += $(BUILD)/$(__dir)$(item))\
+  	$(call parse_zbuild,$(__current_dir)$(item)Makefile),\
+  	$(eval HOSTOBJS += $(BUILD)/$(__current_dir)$(item))\
   )\
 )
 
-$(foreach item,$(shell sed -n 's/^hostprogs-y[[:space:]]*+= *//p' $(1) 2>/dev/null),\
+$(foreach item,$(shell sed -n 's/^hostprog-y[[:space:]]*+= *//p' $(1) 2>/dev/null),\
   $(if $(filter %/,$(item)),\
-    $(call parse_zbuild,$(__dir)$(item)Makefile),\
-    $(eval HOSTPROGS += $(BUILD)/$(__dir)$(item))\
+    $(call parse_zbuild,$(__current_dir)$(item)Makefile),\
+    $(eval HOSTPROGS += $(BUILD)/$(__current_dir)$(item))\
   )\
 )
 
-$(eval __dir := $(__saved_dir))
+$(eval __current_dir := $(__saved_dir))
 endef
 
 -include .config
 $(call parse_zbuild,Zbuild)
+
+define get_prog_objs =
+$(filter $(dir $(1))%.o,$(HOSTOBJS))
+endef
+
+define hostprogs_rule =
+$(1): $(call get_prog_objs,$(1))
+	@echo "  HOSTLD  $$@"
+	@mkdir -p $$(dir $$@)
+	@$(HOSTLD) $$^ -o $$@
+
+$(notdir $(1)): $(1)
+	@echo "  RUN    $$<"
+	@$$<
+endef
+
+$(foreach prog,$(HOSTPROGS),$(eval $(call hostprogs_rule,$(prog))))
+
 
 MAKEFLAGS += --no-print-directory
 
@@ -79,15 +104,12 @@ DEPS += $(HOSTOBJS:.o=.d)
 all: $(OUTPUT)
 	@:
 
-.config: Zconfig scripts/zconfig.sh
-	@$(MAKE) defconfig
-
-defconfig:
+defconfig: .config
 	@sh scripts/zconfig.sh --def
 
-header: .config scripts/zconfig.sh
-	@mkdir -p include
-	@sh scripts/zconfig.sh --header
+.config: Zconfig scripts/zconfig.sh
+	@sh scripts/zconfig.sh --def
+	@touch .config
 
 include/config.h: .config scripts/zconfig.sh
 	@mkdir -p include
@@ -104,27 +126,15 @@ $(BUILD)/%.o: %.c include/config.h
 	@mkdir -p $(dir $@)
 	@$(CC) $(CFLAGS) $(DEPFLAGS) -c $< -o $@
 
-$(BUILD)/tools/mconfig/mconfig: $(HOSTOBJS)
-	@echo "  HOSTLD $@"
-	@mkdir -p $(dir $@)
-	@$(HOSTLD) $^ -o $@
-
-$(BUILD)/tools/mconfig/%.o: tools/mconfig/%.c
-	@echo "  HOSTCC $<"
-	@mkdir -p $(dir $@)
-	@$(HOSTCC) $(HOSTCFLAGS) $(DEPFLAGS) -c $< -o $@
-
 run: all
 	@echo "  RUN   $(OUTPUT)"
 	@$(OUTPUT)
 
-mconfig: $(BUILD)/tools/mconfig/mconfig
-	@echo "  RUN   $<"
-	@$(BUILD)/tools/mconfig/mconfig
-
 clean:
 	@echo "  CLN   build/"
 	@rm -rf $(BUILD) include/config.h
+	@echo "  CLN   include/config.h"
+	@rm -rf include/config.h
 
 help:
 	@echo "Targets:"

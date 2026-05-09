@@ -1,2 +1,3 @@
 obj-y += src/
-hostprogs-y += tools/
+hostprog-y += tools/
+hostprog-y += scripts/
