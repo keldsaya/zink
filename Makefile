@@ -25,7 +25,7 @@ define config_enabled
 $(if $(filter y,$(call config_val,$(1))),1,)
 endef
 
-define parse_kbuild
+define parse_zbuild
 $(eval __current_dir := $(dir $(1)))
 $(eval __saved_dir := $(__dir))
 $(eval __dir := $(__current_dir))
@@ -35,7 +35,7 @@ $(eval _objs := $(shell sed -n 's/^obj-y[[:space:]]*+= *//p' $(1) 2>/dev/null))
 $(if $(_objs),\
   $(foreach item,$(_objs),\
     $(if $(filter %/,$(item)),\
-      $(call parse_kbuild,$(__dir)$(item)Makefile),\
+      $(call parse_zbuild,$(__dir)$(item)Makefile),\
       $(eval OBJS += $(BUILD)/$(__dir)$(item))\
     )\
   )\
@@ -53,14 +53,14 @@ $(if $(_config_objs),\
 
 $(foreach item,$(shell sed -n 's/^hostobj-y[[:space:]]*+= *//p' $(1) 2>/dev/null),\
   $(if $(filter %/,$(item)),\
-  	$(call parse_kbuild,$(__dir)$(item)Makefile),\
+  	$(call parse_zbuild,$(__dir)$(item)Makefile),\
   	$(eval HOSTOBJS += $(BUILD)/$(__dir)$(item))\
   )\
 )
 
 $(foreach item,$(shell sed -n 's/^hostprogs-y[[:space:]]*+= *//p' $(1) 2>/dev/null),\
   $(if $(filter %/,$(item)),\
-    $(call parse_kbuild,$(__dir)$(item)Makefile),\
+    $(call parse_zbuild,$(__dir)$(item)Makefile),\
     $(eval HOSTPROGS += $(BUILD)/$(__dir)$(item))\
   )\
 )
@@ -69,7 +69,7 @@ $(eval __dir := $(__saved_dir))
 endef
 
 -include .config
-$(call parse_kbuild,Kbuild)
+$(call parse_zbuild,Zbuild)
 
 MAKEFLAGS += --no-print-directory
 
@@ -79,19 +79,19 @@ DEPS += $(HOSTOBJS:.o=.d)
 all: $(OUTPUT)
 	@:
 
-.config: Kconfig scripts/kconfig.sh
+.config: Zconfig scripts/zconfig.sh
 	@$(MAKE) defconfig
 
 defconfig:
-	@sh scripts/kconfig.sh --def
+	@sh scripts/zconfig.sh --def
 
-header: .config scripts/kconfig.sh
+header: .config scripts/zconfig.sh
 	@mkdir -p include
-	@sh scripts/kconfig.sh --header
+	@sh scripts/zconfig.sh --header
 
-include/config.h: .config scripts/kconfig.sh
+include/config.h: .config scripts/zconfig.sh
 	@mkdir -p include
-	@sh scripts/kconfig.sh --header
+	@sh scripts/zconfig.sh --header
 
 
 $(OUTPUT): $(OBJS)
