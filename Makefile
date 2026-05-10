@@ -4,80 +4,36 @@ SUBLEVEL = 1
 EXTRAVERSION = -rc1
 NAME = Program
 
-PROGRAMVERSION = $(VERSION)$(if $(PATCHLEVEL),.$(PATCHLEVEL)$(if $(SUBLEVEL),.$(SUBLEVEL)))$(EXTRAVERSION) VERSIONSTR = $(PROGRAMVERSION) ($(NAME))
+PROGRAMVERSION = $(VERSION)$(if $(PATCHLEVEL),.$(PATCHLEVEL)$(if $(SUBLEVEL),.$(SUBLEVEL)))$(EXTRAVERSION)
+VERSIONSTR = $(PROGRAMVERSION) ($(NAME))
 
 HOSTCC   := gcc
 HOSTCFLAGS := -Wall -Wextra
 HOSTLD   := $(HOSTCC)
 
 CC       := gcc
-CFLAGS   := -Wall -Wextra -Iinclude 
-LDFLAGS  := 
+CFLAGS   := -Wall -Wextra -Iinclude
+LDFLAGS  :=
 LD       := $(CC)
 
 -include local.mk
 
 DEPFLAGS = -MMD -MP -MF $(@:.o=.d)
+HOSTDEPFLAGS = -MMD -MP -MF $(@:.host.o=.d)
 
 BUILD    := build
 OUTPUT   := $(BUILD)/program
 
-OBJS      :=
-HOSTOBJS :=
-HOSTPROGS :=
-DEPS      :=
+KBUILD_INCLUDES := build/generated/objs.mk
 
-define config_val
-$(shell grep -E '^$(1)=' $(CURDIR)/.config 2>/dev/null | head -1 | sed 's/[^=]*=//' | tr -d '"')
-endef
+$(KBUILD_INCLUDES): $(shell find . -name Makefile 2>/dev/null) .config
+	@mkdir -p build/generated
+	@sh scripts/zbuild/parse.sh .config
 
-define config_enabled
-$(if $(filter y,$(call config_val,$(1))),1,)
-endef
+-include $(KBUILD_INCLUDES)
 
-define parse_zbuild
-$(eval __current_dir := $(dir $(1)))
-
-$(eval _objs := $(shell sed -n 's/^obj-y[[:space:]]*+= *//p' $(1) 2>/dev/null))
-
-$(if $(_objs),\
-  $(foreach item,$(_objs),\
-    $(if $(filter %/,$(item)),\
-      $(call parse_zbuild,$(__current_dir)$(item)Makefile),\
-      $(eval OBJS += $(BUILD)/$(__current_dir)$(item))\
-    )\
-  )\
-)
-
-$(eval _config_objs := $(shell sed -n '/^obj-\$$(CONFIG_/ s/^obj-\$$(CONFIG_\([^)]*\))[[:space:]]*+= *//p' $(1) 2>/dev/null))
-$(if $(_config_objs),\
-  $(foreach item,$(_config_objs),\
-    $(eval _var_name := $(shell echo $(item) | sed 's/\.o$$//' | tr 'a-z' 'A-Z'))\
-    $(if $(filter y, $(CONFIG_$(_var_name))),\
-      $(eval OBJS += $(BUILD)/$(__current_dir)$(item))\
-    )\
-  )\
-)
-
-$(foreach item,$(shell sed -n 's/^hostobj-y[[:space:]]*+= *//p' $(1) 2>/dev/null),\
-  $(if $(filter %/,$(item)),\
-  	$(call parse_zbuild,$(__current_dir)$(item)Makefile),\
-		$(eval HOSTOBJS += $(BUILD)/$(__current_dir)$(item:.o=.host.o))\
-  )\
-)
-
-$(foreach item,$(shell sed -n 's/^hostprog-y[[:space:]]*+= *//p' $(1) 2>/dev/null),\
-  $(if $(filter %/,$(item)),\
-    $(call parse_zbuild,$(__current_dir)$(item)Makefile),\
-    $(eval HOSTPROGS += $(BUILD)/$(__current_dir)$(item))\
-  )\
-)
-
-$(eval __current_dir := $(__saved_dir))
-endef
-
--include .config
-$(call parse_zbuild,Zbuild)
+DEPS := $(OBJS:.o=.d) $(HOSTOBJS:.o=.d)
+-include $(DEPS)
 
 define get_prog_objs =
 $(filter $(dir $(1))%.o,$(HOSTOBJS))
@@ -90,7 +46,6 @@ $(1): $(call get_prog_objs,$(1))
 	@$(HOSTLD) $$^ -o $$@
 
 $(notdir $(1)): $(1)
-	@echo "  RUN    $$<"
 	@$$<
 endef
 
@@ -98,10 +53,7 @@ $(foreach prog,$(HOSTPROGS),$(eval $(call hostprogs_rule,$(prog))))
 
 MAKEFLAGS += --no-print-directory
 
-DEPS += $(OBJS:.o=.d)
-DEPS += $(HOSTOBJS:.o=.d)
-
-all: $(OUTPUT)
+all: include/version.h $(OUTPUT)
 	@:
 
 defconfig: .config
@@ -109,19 +61,21 @@ defconfig: .config
 
 .config: Zconfig scripts/zconfig.sh
 	@sh scripts/zconfig.sh --def
-	@touch .config
+
+include/version.h: scripts/version.sh
+	@mkdir -p include
+	@sh scripts/version.sh $(VERSION) $(PATCHLEVEL) $(SUBLEVEL) $(EXTRAVERSION) "$(NAME)" $@
 
 include/config.h: .config scripts/zconfig.sh
 	@mkdir -p include
 	@sh scripts/zconfig.sh --header
-
 
 $(OUTPUT): $(OBJS)
 	@echo "  LD    $(OUTPUT)"
 	@mkdir -p $(BUILD)
 	@$(CC) $(LDFLAGS) $(OBJS) -o $(OUTPUT)
 
-$(BUILD)/%.o: %.c include/config.h
+$(BUILD)/%.o: %.c include/config.h include/version.h
 	@echo "  CC    $<"
 	@mkdir -p $(dir $@)
 	@$(CC) $(CFLAGS) $(DEPFLAGS) -c $< -o $@
@@ -137,9 +91,11 @@ run: all
 
 clean:
 	@echo "  CLN   build/"
-	@rm -rf $(BUILD) include/config.h
+	@rm -rf $(BUILD)
 	@echo "  CLN   .config"
 	@rm -rf .config
+	@echo "  CLN   include/version.h"
+	@rm -rf include/version.h
 	@echo "  CLN   include/config.h"
 	@rm -rf include/config.h
 
@@ -154,6 +110,4 @@ help:
 
 .DEFAULT_GOAL := all
 
-.PHONY: all clean run help defconfig mconfig header
-
--include $(DEPS)
+.PHONY: all clean run help defconfig mconfig
