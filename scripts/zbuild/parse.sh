@@ -19,49 +19,104 @@ add_line() {
   echo "$1" >> "$OUTPUT"
 }
 
-while IFS= read -r mf; do
+parse_makefile() {
+  local mf="$1"
+  local dir
   dir=$(dirname "$mf")
   dir="${dir#./}"
   [[ "$dir" == "." ]] && dir=""
 
   while IFS= read -r line; do
+    # obj-y += file.o
     if [[ "$line" =~ ^obj-y[[:space:]]*\+\=[[:space:]]*(.+)$ ]]; then
       for item in ${BASH_REMATCH[1]}; do
-        if [[ ! "$item" =~ /$ ]]; then
-          add_line "OBJS += build/${dir}/${item%.o}.o"
+        if [[ "$item" =~ /$ ]]; then
+          local subdir="${item%/}"
+          local subpath
+          if [[ -n "$dir" ]]; then
+            subpath="${dir}/${subdir}/Makefile"
+          else
+            subpath="${subdir}/Makefile"
+          fi
+          if [[ -f "$subpath" ]]; then
+            parse_makefile "$subpath"
+          fi
+        else
+          if [[ -n "$dir" ]]; then
+            add_line "OBJS += build/${dir}/${item%.o}.o"
+          else
+            add_line "OBJS += build/${item%.o}.o"
+          fi
         fi
       done
     fi
 
+    # obj-$(CONFIG_XYZ) += file.o
     if [[ "$line" =~ ^obj-\$\(CONFIG_([a-zA-Z0-9_]+)\)[[:space:]]*\+\=[[:space:]]*(.+)$ ]]; then
       cfg_name="CONFIG_${BASH_REMATCH[1]}"
       items="${BASH_REMATCH[2]}"
 
       if [[ "${CONFIG[$cfg_name]}" == "y" ]]; then
         for item in $items; do
-          if [[ ! "$item" =~ /$ ]]; then
-            add_line "OBJS += build/${dir}/${item%.o}.o"
+          if [[ "$item" =~ /$ ]]; then
+            local subdir="${item%/}"
+            local subpath
+            if [[ -n "$dir" ]]; then
+              subpath="${dir}/${subdir}/Makefile"
+            else
+              subpath="${subdir}/Makefile"
+            fi
+            if [[ -f "$subpath" ]]; then
+              parse_makefile "$subpath"
+            fi
+          else
+            if [[ -n "$dir" ]]; then
+              add_line "OBJS += build/${dir}/${item%.o}.o"
+            else
+              add_line "OBJS += build/${item%.o}.o"
+            fi
           fi
         done
       fi
     fi
 
+    # hostobj-y += file.o
     if [[ "$line" =~ ^hostobj-y[[:space:]]*\+\=[[:space:]]*(.+)$ ]]; then
       for item in ${BASH_REMATCH[1]}; do
         if [[ ! "$item" =~ /$ ]] && [[ "$item" =~ \.o$ ]]; then
-          add_line "HOSTOBJS += build/${dir}/${item%.o}.host.o"
+          if [[ -n "$dir" ]]; then
+            add_line "HOSTOBJS += build/${dir}/${item%.o}.host.o"
+          else
+            add_line "HOSTOBJS += build/${item%.o}.host.o"
+          fi
         fi
       done
     fi
 
+    # hostprog-y += dir/
     if [[ "$line" =~ ^hostprog-y[[:space:]]*\+\=[[:space:]]*(.+)$ ]]; then
       for item in ${BASH_REMATCH[1]}; do
-        if [[ ! "$item" =~ /$ ]]; then
-          add_line "HOSTPROGS += build/${dir}/$item"
+        if [[ "$item" =~ /$ ]]; then
+          local subdir="${item%/}"
+          local subpath
+          if [[ -n "$dir" ]]; then
+            subpath="${dir}/${subdir}/Makefile"
+          else
+            subpath="${subdir}/Makefile"
+          fi
+          if [[ -f "$subpath" ]]; then
+            parse_makefile "$subpath"
+          fi
+        else
+          if [[ -n "$dir" ]]; then
+            add_line "HOSTPROGS += build/${dir}/$item"
+          else
+            add_line "HOSTPROGS += build/$item"
+          fi
         fi
       done
     fi
   done < "$mf"
-done < <(find . -name "Makefile" -type f | grep -v "build/")
+}
 
-#echo "Generated: $(wc -l < "$OUTPUT") entries" >&2
+parse_makefile "Zbuild"
