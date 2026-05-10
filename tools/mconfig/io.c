@@ -35,7 +35,7 @@ void save_config_values(menu_t *menu, const char *filename) {
     fprintf(stderr, "Cannot write %s\n", filename);
     return;
   }
-  fprintf(fp, "# Lanex Kernel Configuration\n# Auto-generated\n\n");
+  fprintf(fp, "# Auto-generated\n\n");
   save_recursive(menu, fp);
   fclose(fp);
 }

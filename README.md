@@ -83,3 +83,6 @@ config SAMPLE
 
 endmenu
 ```
+
+### Specifical Flags
+Editing `local.mk`

@@ -4,19 +4,20 @@ SUBLEVEL = 1
 EXTRAVERSION = -rc1
 NAME = Program
 
-PROGRAMVERSION = $(VERSION)$(if $(PATCHLEVEL),.$(PATCHLEVEL)$(if $(SUBLEVEL),.$(SUBLEVEL)))$(EXTRAVERSION)
-VERSIONSTR = $(PROGRAMVERSION) ($(NAME))
+PROGRAMVERSION = $(VERSION)$(if $(PATCHLEVEL),.$(PATCHLEVEL)$(if $(SUBLEVEL),.$(SUBLEVEL)))$(EXTRAVERSION) VERSIONSTR = $(PROGRAMVERSION) ($(NAME))
 
 HOSTCC   := gcc
 HOSTCFLAGS := -Wall -Wextra
 HOSTLD   := $(HOSTCC)
 
 CC       := gcc
-CFLAGS   := -Wall -Wextra -Iinclude
+CFLAGS   := -Wall -Wextra -Iinclude 
+LDFLAGS  := 
 LD       := $(CC)
 
-DEPFLAGS = -MMD -MP -MF $(@:.o=.d)
+-include local.mk
 
+DEPFLAGS = -MMD -MP -MF $(@:.o=.d)
 
 BUILD    := build
 OUTPUT   := $(BUILD)/program
@@ -95,7 +96,6 @@ endef
 
 $(foreach prog,$(HOSTPROGS),$(eval $(call hostprogs_rule,$(prog))))
 
-
 MAKEFLAGS += --no-print-directory
 
 DEPS += $(OBJS:.o=.d)
@@ -119,7 +119,7 @@ include/config.h: .config scripts/zconfig.sh
 $(OUTPUT): $(OBJS)
 	@echo "  LD    $(OUTPUT)"
 	@mkdir -p $(BUILD)
-	@$(CC) $(OBJS) -o $(OUTPUT)
+	@$(CC) $(LDFLAGS) $(OBJS) -o $(OUTPUT)
 
 $(BUILD)/%.o: %.c include/config.h
 	@echo "  CC    $<"
@@ -138,6 +138,8 @@ run: all
 clean:
 	@echo "  CLN   build/"
 	@rm -rf $(BUILD) include/config.h
+	@echo "  CLN   .config"
+	@rm -rf .config
 	@echo "  CLN   include/config.h"
 	@rm -rf include/config.h
 
