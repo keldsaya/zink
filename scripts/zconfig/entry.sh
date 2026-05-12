@@ -28,6 +28,7 @@ case "$1" in
         exec "$SCRIPT_DIR/disable.sh" "$@"
         ;;
     *)
+	echo "$1"
         echo "Usage: $0 --defconfig|--oldconfig|--savedefconfig|--header|--enable VAR|--disable VAR"
         exit 1
         ;;
