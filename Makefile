@@ -5,92 +5,56 @@ EXTRAVERSION = -rc1
 NAME = Program
 
 PROGRAMVERSION = $(VERSION)$(if $(PATCHLEVEL),.$(PATCHLEVEL)$(if $(SUBLEVEL),.$(SUBLEVEL)))$(EXTRAVERSION)
-VERSIONSTR = $(PROGRAMVERSION) ($(NAME))
 
-HOSTCC   := gcc
-HOSTCFLAGS := -Wall -Wextra
-HOSTLD   := $(HOSTCC)
+# tools
+HOSTCC    := gcc
+HOSTLD    := $(HOSTCC)
+HOSTFLAGS := -Wall -Wextra
 
-CC       := gcc
-CFLAGS   := -Wall -Wextra -Iinclude
-LDFLAGS  :=
-LD       := $(CC)
+CC     := gcc
+LD     := $(CC)
+CFLAGS := -Wall -Wextra -Iinclude
+LDFLAGS :=
 
 -include local.mk
 
-DEPFLAGS = -MMD -MP -MF $(@:.o=.d)
-HOSTDEPFLAGS = -MMD -MP -MF $(@:.host.o=.d)
+# paths
+BUILD     := build
+DEPSDIR   := $(BUILD)/deps
+OUTPUT    := $(BUILD)/program
+OBJS_MK   := $(BUILD)/generated/objs.mk
+CONFIG_H  := include/config.h
+VERSION_H := include/version.h
 
-BUILD    := build
-OUTPUT   := $(BUILD)/program
+DEPFLAGS     = -MMD -MP -MF $(DEPSDIR)/$(subst /,_,$*).d
+HOSTDEPFLAGS = -MMD -MP -MF $(DEPSDIR)/$(subst /,_,$*).host.d
 
-BUILD_INCLUDES := build/generated/objs.mk
-
-SHELL := /bin/bash
-
-
-$(BUILD_INCLUDES): .config
-	@mkdir -p build/generated
-	@bash scripts/zbuild/parse.sh .config
-
--include $(BUILD_INCLUDES)
-
-DEPS := $(OBJS:.o=.d) $(HOSTOBJS:.o=.d)
--include $(DEPS)
-
-define get_prog_objs =
-$(filter $(dir $(1))%.o,$(HOSTOBJS))
-endef
-
-define hostprogs_rule =
-$(1): $(call get_prog_objs,$(1))
-	@echo "  HOSTLD  $$@"
-	@mkdir -p $$(dir $$@)
-	@$(HOSTLD) $$^ -o $$@
-
-$(notdir $(1)): $(1)
-	@$$<
-endef
-
-$(foreach prog,$(HOSTPROGS),$(eval $(call hostprogs_rule,$(prog))))
-
+SHELL     := /bin/sh
 MAKEFLAGS += --no-print-directory
 
-all: include/version.h $(OUTPUT)
-	@:
+.DEFAULT_GOAL := all
 
-%config: scripts/zconfig/entry.sh
-	@if echo "$@" | grep -q '[./]'; then \
-		echo "" \
-	else \
-		bash scripts/zconfig/entry.sh --$@; \
-	fi
 
-.config: ./Zconfig scripts/zconfig/entry.sh 
-	@bash scripts/zconfig/entry.sh --defconfig
+ifeq ($(filter clean mrproper help defconfig oldconfig savedefconfig,$(MAKECMDGOALS)),)
 
-include/config.h: .config scripts/zconfig/entry.sh
-	@mkdir -p include
-	@bash scripts/zconfig/entry.sh --header
+.config: ./Zconfig scripts/zconfig/entry.sh
+	@echo "  GEN   .config"
+	@sh scripts/zconfig/entry.sh --defconfig
 
-include/version.h: scripts/version.sh
-	@mkdir -p include
-	@bash scripts/version.sh $(VERSION) $(PATCHLEVEL) $(SUBLEVEL) $(EXTRAVERSION) "$(NAME)" $@
+$(OBJS_MK): .config scripts/zbuild/parse.sh
+	@mkdir -p $(dir $(OBJS_MK))
+	@sh scripts/zbuild/parse.sh .config
 
-$(OUTPUT): $(OBJS)
-	@echo "  LD    $(OUTPUT)"
-	@mkdir -p $(BUILD)
-	@$(CC) $(LDFLAGS) $(OBJS) -o $(OUTPUT)
+-include $(OBJS_MK)
 
-$(BUILD)/%.o: %.c include/config.h include/version.h 
-	@echo "  CC    $<"
-	@mkdir -p $(dir $@)
-	@$(CC) $(CFLAGS) $(DEPFLAGS) -c $< -o $@
+DEPS := $(addprefix $(DEPSDIR)/,$(subst /,_,$(OBJS:.o=.d))) \
+        $(addprefix $(DEPSDIR)/,$(subst /,_,$(HOSTOBJS:.host.o=.host.d)))
+-include $(DEPS)
 
-$(BUILD)/%.host.o: %.c
-	@echo "  HOSTCC  $<"
-	@mkdir -p $(dir $@)
-	@$(HOSTCC) $(HOSTCFLAGS) $(HOSTDEPFLAGS) -c $< -o $@
+endif
+
+# targets
+all: $(CONFIG_H) $(VERSION_H) $(OUTPUT)
 
 run: all
 	@echo "  RUN   $(OUTPUT)"
@@ -99,24 +63,70 @@ run: all
 clean:
 	@echo "  CLN   build/"
 	@rm -rf $(BUILD)
+	@echo "  CLN   $(VERSION_H)"
+	@rm -f $(VERSION_H)
+	@echo "  CLN   $(CONFIG_H)"
+	@rm -f $(CONFIG_H)
+
+mrproper: clean
 	@echo "  CLN   .config"
-	@rm -rf .config
-	@echo "  CLN   include/version.h"
-	@rm -rf include/version.h
-	@echo "  CLN   include/config.h"
-	@rm -rf include/config.h
+	@rm -f .config
 
 help:
 	@echo "Targets:"
-	@echo "  all        - build project"
-	@echo "  clean      - remove build/"
-	@echo "  run        - run executable"
-	@echo "  mconfig    - run menu config"
-	@echo "  defconfig  - generate .config"
-	@echo "  oldconfig  - update .config"
-	@echo "  savedefconfig - save minimal defconfig"
-	@echo "  help       - show help"
+	@echo "  all           build project"
+	@echo "  clean         remove build/"
+	@echo "  mrproper      remove build/ and .config"
+	@echo "  run           run executable"
+	@echo "  mconfig       run menu config"
+	@echo "  defconfig     generate .config"
+	@echo "  oldconfig     update .config"
+	@echo "  savedefconfig save minimal defconfig"
+	@echo "  help          show help"
 
-.DEFAULT_GOAL := all
+.PHONY: all clean mrproper run help
 
-.PHONY: all clean run help mconfig
+# headers gen
+$(CONFIG_H): .config scripts/zconfig/entry.sh
+	@sh scripts/zconfig/entry.sh --header
+
+$(VERSION_H): scripts/version.sh
+	@sh scripts/version.sh $(VERSION) $(PATCHLEVEL) $(SUBLEVEL) $(EXTRAVERSION) "$(NAME)" $@
+
+%config: scripts/zconfig/entry.sh
+	@case "$@" in \
+		.config|Zconfig|mconfig) ;; \
+		*/*|*.*) ;; \
+		*) sh scripts/zconfig/entry.sh --$@ ;; \
+	esac
+
+# compilation
+$(OUTPUT): $(OBJS) $(CONFIG_H) $(VERSION_H)
+	@echo "  LD    $(OUTPUT)"
+	@$(LD) $(LDFLAGS) $(OBJS) -o $@
+
+$(BUILD)/%.o: %.c $(CONFIG_H) $(VERSION_H)
+	@mkdir -p $(dir $@) $(DEPSDIR)
+	@echo "  CC    $<"
+	@$(CC) $(CFLAGS) $(DEPFLAGS) -c $< -o $@
+
+$(BUILD)/%.host.o: %.c $(CONFIG_H)
+	@mkdir -p $(dir $@) $(DEPSDIR)
+	@echo "  HOSTCC  $<"
+	@$(HOSTCC) $(HOSTFLAGS) $(HOSTDEPFLAGS) -c $< -o $@
+
+# hosts
+define get_prog_objs
+$(filter $(dir $(1))%.host.o,$(HOSTOBJS))
+endef
+
+define hostprogs_rule
+$(1): $(call get_prog_objs,$(1))
+	@echo "  HOSTLD  $$@"
+	@$(HOSTLD) $$^ -o $$@
+
+$(notdir $(1)): $(1)
+	@$$<
+endef
+
+$(foreach prog,$(HOSTPROGS),$(eval $(call hostprogs_rule,$(prog))))
