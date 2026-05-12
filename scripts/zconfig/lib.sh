@@ -105,26 +105,3 @@ generate_header() {
   done < "$CONFIG_OUT"
 }
 
-case "$1" in
-  --def)
-    { echo "# Auto-generated"; echo ""; generate_defconfig; } > "$CONFIG_OUT"
-    echo "  GEN   $CONFIG_OUT"
-    ;;
-
-  --header)
-    if [ -f "$CONFIG_OUT" ]; then
-      generate_header > "$HEADER_OUT"
-      echo "  GEN   $HEADER_OUT"
-    else
-      echo "Error: $CONFIG_OUT not found. Run '$0 --def' first." >&2
-      exit 1
-    fi
-    ;;
-
-  *)
-    echo "Usage:"
-    echo "  $0 --def    - Generate default .config from Zconfig"
-    echo "  $0 --header - Generate config.h from .config"
-    exit 1
-    ;;
-esac

@@ -26,9 +26,12 @@ OUTPUT   := $(BUILD)/program
 
 KBUILD_INCLUDES := build/generated/objs.mk
 
-$(KBUILD_INCLUDES): $(shell find . -name Makefile 2>/dev/null) .config
+SHELL := /bin/bash
+
+# Генерация objs.mk - НЕ зависит от .config чтобы избежать цикла
+$(KBUILD_INCLUDES): $(shell find . -name Makefile 2>/dev/null)
 	@mkdir -p build/generated
-	@sh scripts/zbuild/parse.sh .config
+	@bash scripts/zbuild/parse.sh .config
 
 -include $(KBUILD_INCLUDES)
 
@@ -56,19 +59,26 @@ MAKEFLAGS += --no-print-directory
 all: include/version.h $(OUTPUT)
 	@:
 
-defconfig: .config
-	@sh scripts/zconfig.sh --def
+%config: scripts/zconfig/entry.sh
+	@if [ -f "$@" ] && [ "$@" != "defconfig" ] && [ "$@" != "oldconfig" ] && [ "$@" != "savedefconfig" ]; then \
+	else \
+		bash scripts/zconfig/entry.sh --$@; \
+	fi
 
-.config: Zconfig scripts/zconfig.sh
-	@sh scripts/zconfig.sh --def
+.PHONY: defconfig oldconfig savedefconfig
+defconfig oldconfig savedefconfig: scripts/zconfig/entry.sh
+	@bash scripts/zconfig/entry.sh --$@
+
+.config: Zconfig scripts/zconfig/entry.sh 
+	@bash scripts/zconfig/entry.sh --defconfig
+
+include/config.h: .config scripts/zconfig/entry.sh
+	@mkdir -p include
+	@bash scripts/zconfig/entry.sh --header
 
 include/version.h: scripts/version.sh
 	@mkdir -p include
-	@sh scripts/version.sh $(VERSION) $(PATCHLEVEL) $(SUBLEVEL) $(EXTRAVERSION) "$(NAME)" $@
-
-include/config.h: .config scripts/zconfig.sh
-	@mkdir -p include
-	@sh scripts/zconfig.sh --header
+	@bash scripts/version.sh $(VERSION) $(PATCHLEVEL) $(SUBLEVEL) $(EXTRAVERSION) "$(NAME)" $@
 
 $(OUTPUT): $(OBJS)
 	@echo "  LD    $(OUTPUT)"
@@ -106,8 +116,10 @@ help:
 	@echo "  run        - run executable"
 	@echo "  mconfig    - run menu config"
 	@echo "  defconfig  - generate .config"
+	@echo "  oldconfig  - update .config"
+	@echo "  savedefconfig - save minimal defconfig"
 	@echo "  help       - show help"
 
 .DEFAULT_GOAL := all
 
-.PHONY: all clean run help defconfig mconfig
+.PHONY: all clean run help mconfig
