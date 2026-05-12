@@ -24,16 +24,16 @@ HOSTDEPFLAGS = -MMD -MP -MF $(@:.host.o=.d)
 BUILD    := build
 OUTPUT   := $(BUILD)/program
 
-KBUILD_INCLUDES := build/generated/objs.mk
+BUILD_INCLUDES := build/generated/objs.mk
 
 SHELL := /bin/bash
 
-# Генерация objs.mk - НЕ зависит от .config чтобы избежать цикла
-$(KBUILD_INCLUDES): $(shell find . -name Makefile 2>/dev/null)
+
+$(BUILD_INCLUDES): .config
 	@mkdir -p build/generated
 	@bash scripts/zbuild/parse.sh .config
 
--include $(KBUILD_INCLUDES)
+-include $(BUILD_INCLUDES)
 
 DEPS := $(OBJS:.o=.d) $(HOSTOBJS:.o=.d)
 -include $(DEPS)
@@ -60,16 +60,13 @@ all: include/version.h $(OUTPUT)
 	@:
 
 %config: scripts/zconfig/entry.sh
-	@if [ -f "$@" ] && [ "$@" != "defconfig" ] && [ "$@" != "oldconfig" ] && [ "$@" != "savedefconfig" ]; then \
+	@if echo "$@" | grep -q '[./]'; then \
+		echo "" \
 	else \
 		bash scripts/zconfig/entry.sh --$@; \
 	fi
 
-.PHONY: defconfig oldconfig savedefconfig
-defconfig oldconfig savedefconfig: scripts/zconfig/entry.sh
-	@bash scripts/zconfig/entry.sh --$@
-
-.config: Zconfig scripts/zconfig/entry.sh 
+.config: ./Zconfig scripts/zconfig/entry.sh 
 	@bash scripts/zconfig/entry.sh --defconfig
 
 include/config.h: .config scripts/zconfig/entry.sh
@@ -85,7 +82,7 @@ $(OUTPUT): $(OBJS)
 	@mkdir -p $(BUILD)
 	@$(CC) $(LDFLAGS) $(OBJS) -o $(OUTPUT)
 
-$(BUILD)/%.o: %.c include/config.h include/version.h
+$(BUILD)/%.o: %.c include/config.h include/version.h 
 	@echo "  CC    $<"
 	@mkdir -p $(dir $@)
 	@$(CC) $(CFLAGS) $(DEPFLAGS) -c $< -o $@
