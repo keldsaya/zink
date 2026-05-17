@@ -38,4 +38,4 @@ cat > "$OUTPUT" << EOF
 #endif /* __VERSION_H */
 EOF
 
-echo "  GEN   $OUTPUT"
+scripts/log.sh "GEN" "$OUTPUT"

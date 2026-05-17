@@ -13,4 +13,4 @@ fi
 
 mkdir -p include
 generate_header > "$HEADER_OUT"
-echo "  GEN   $HEADER_OUT"
+scripts/log.sh "GEN" "$HEADER_OUT"

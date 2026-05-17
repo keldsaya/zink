@@ -13,4 +13,4 @@ rm -f $CONFIG_OUT
   generate_defconfig
 } > "$CONFIG_OUT"
 
-echo "  GEN   $CONFIG_OUT"
+scripts/log.sh "GEN" "$CONFIG_OUT"

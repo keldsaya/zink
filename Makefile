@@ -11,10 +11,15 @@ HOSTCC    := gcc
 HOSTLD    := $(HOSTCC)
 HOSTFLAGS := -Wall -Wextra
 
-CC     := gcc
-LD     := $(CC)
-CFLAGS := -Wall -Wextra -Iinclude
-LDFLAGS :=
+CC        := gcc
+LD        := $(CC)
+CFLAGS    := -Wall -Wextra -Iinclude
+LDFLAGS   :=
+
+ASM       := nasm
+ASMFLAGS  :=
+GASM      := $(CC)
+GASMFLAGS :=
 
 -include local.mk
 
@@ -26,24 +31,33 @@ OBJS_MK   := $(BUILD)/generated/objs.mk
 CONFIG_H  := include/config.h
 VERSION_H := include/version.h
 
+# scripts
+LOG       := scripts/log.sh
+CLEAN_SH  := scripts/clean/entry.sh
+CONFIG_SH := scripts/zconfig/entry.sh
+PARSER_SH := scripts/zbuild/parse.sh
+VERSION_SH := scripts/version.sh
+
 DEPFLAGS     = -MMD -MP -MF $(DEPSDIR)/$(subst /,_,$*).d
 HOSTDEPFLAGS = -MMD -MP -MF $(DEPSDIR)/$(subst /,_,$*).host.d
+
+DEPFLAGS_ASM  = -MD -MF $(DEPSDIR)/$(subst /,_,$*).d
+DEPFLAGS_GASM = -MMD -MP -MF $(DEPSDIR)/$(subst /,_,$*).d
 
 SHELL     := /bin/sh
 MAKEFLAGS += --no-print-directory
 
 .DEFAULT_GOAL := all
 
-
 ifeq ($(filter clean mrproper help defconfig oldconfig savedefconfig,$(MAKECMDGOALS)),)
 
 .config: ./Zconfig scripts/zconfig/entry.sh
-	@echo "  GEN   .config"
-	@sh scripts/zconfig/entry.sh --defconfig
+	@$(LOG) "GEN" ".config"
+	@$(CONFIG_SH) --defconfig
 
 $(OBJS_MK): .config scripts/zbuild/parse.sh
 	@mkdir -p $(dir $(OBJS_MK))
-	@sh scripts/zbuild/parse.sh .config
+	@$(PARSER_SH) .config
 
 -include $(OBJS_MK)
 
@@ -57,20 +71,14 @@ endif
 all: $(CONFIG_H) $(VERSION_H) $(OUTPUT)
 
 run: all
-	@echo "  RUN   $(OUTPUT)"
+	@$(LOG) "RUN" "$(OUTPUT)"
 	@$(OUTPUT)
 
 clean:
-	@echo "  CLN   build/"
-	@rm -rf $(BUILD)
-	@echo "  CLN   $(VERSION_H)"
-	@rm -f $(VERSION_H)
-	@echo "  CLN   $(CONFIG_H)"
-	@rm -f $(CONFIG_H)
+	@$(CLEAN_SH) --base $(OUTPUT)
 
 mrproper: clean
-	@echo "  CLN   .config"
-	@rm -f .config
+	@$(CLEAN_SH) --proper
 
 help:
 	@echo "Targets:"
@@ -88,31 +96,41 @@ help:
 
 # headers gen
 $(CONFIG_H): .config scripts/zconfig/entry.sh
-	@sh scripts/zconfig/entry.sh --header
+	@$(CONFIG_SH) --header
 
 $(VERSION_H): scripts/version.sh
-	@sh scripts/version.sh $(VERSION) $(PATCHLEVEL) $(SUBLEVEL) $(EXTRAVERSION) "$(NAME)" $@
+	@$(VERSION_SH) $(VERSION) $(PATCHLEVEL) $(SUBLEVEL) $(EXTRAVERSION) "$(NAME)" $@
 
 %config: scripts/zconfig/entry.sh
 	@case "$@" in \
 		.config|Zconfig|mconfig) ;; \
 		*/*|*.*) ;; \
-		*) sh scripts/zconfig/entry.sh --$@ ;; \
+		*) $(CONFIG_SH) --$@ ;; \
 	esac
 
 # compilation
 $(OUTPUT): $(OBJS) $(CONFIG_H) $(VERSION_H)
-	@echo "  LD    $(OUTPUT)"
+	@$(LOG) "LD" "$(OUTPUT)"
 	@$(LD) $(LDFLAGS) $(OBJS) -o $@
 
 $(BUILD)/%.o: %.c $(CONFIG_H) $(VERSION_H)
 	@mkdir -p $(dir $@) $(DEPSDIR)
-	@echo "  CC    $<"
+	@$(LOG) "CC" "$<"
 	@$(CC) $(CFLAGS) $(DEPFLAGS) -c $< -o $@
+
+$(BUILD)/%.o: %.asm
+	@mkdir -p $(dir $@) $(DEPSDIR)
+	@$(LOG) "ASM" "$<"
+	@$(ASM) $(ASMFLAGS) $(DEPFLAGS_ASM) $< -o $@
+
+$(BUILD)/%.o: %.s
+	@mkdir -p $(dir $@) $(DEPSDIR)
+	@$(LOG) "GASM" "$<"
+	@$(GASM) $(GASMFLAGS) $(DEPFLAGS_GASM) -c $< -o $@
 
 $(BUILD)/%.host.o: %.c $(CONFIG_H)
 	@mkdir -p $(dir $@) $(DEPSDIR)
-	@echo "  HOSTCC  $<"
+	@$(LOG) "HOSTCC" "$<"
 	@$(HOSTCC) $(HOSTFLAGS) $(HOSTDEPFLAGS) -c $< -o $@
 
 # hosts
@@ -122,7 +140,7 @@ endef
 
 define hostprogs_rule
 $(1): $(call get_prog_objs,$(1))
-	@echo "  HOSTLD  $$@"
+	@$(LOG) "HOSTCC" "$$@"
 	@$(HOSTLD) $$^ -o $$@
 
 $(notdir $(1)): $(1)

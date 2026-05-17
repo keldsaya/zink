@@ -1,5 +1,5 @@
-#include <stdio.h>
 #include "config.h"
+#include <stdio.h>
 
 #ifdef CONFIG_SAMPLE
 void sample_feature();
